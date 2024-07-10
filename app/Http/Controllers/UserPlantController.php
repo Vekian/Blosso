@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plant;
+use App\Services\Api\WeatherService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -48,7 +49,7 @@ class UserPlantController extends Controller
             )
         ), 
     ])]
-    public function create(Request $request)
+    public function create(Request $request, WeatherService $weatherService)
     {
         try {
             $validatedLocalisation = $request->validate([
@@ -75,20 +76,32 @@ class UserPlantController extends Controller
                 'name' => 'required|string|max:255',
             ]);
     
-            $plant = Plant::where('common_name', $validatedPlant['name'])->first();
+            $plant = Plant::where('common_name', 'LIKE', '%' . $validatedPlant['name'] . '%')->first();
             if (!$plant) {
                 return response()->json(['message' => 'Plante non trouvée'], 404);
             }
-            
+            $notifWatering ="";
+            $wateringData = [];
+
+            try {
+                $wateringData = $weatherService->calculeWhenToWater($plant, $user->city);
+                $notifWatering = match($wateringData['trust']){
+                    true => "Il faudra l'arroser le " . $wateringData['date'],
+                    false => "Pas besoin d'arroser jusqu'au " . $wateringData['date'],
+                };
+            } catch (\Exception $e) {
+                return response()->json(['message' => 'Erreur lors du calcul de la date d\'arrosage: ' . $e], 500);
+            }
             $plantUser = $user->plants()->find($plant->id);
             if (!$plantUser) {
                 $user->plants()->attach($plant->id);
             }
+            
 
         } catch(\Exception $e) {
             return response()->json(['message' => "Erreur lors de l'ajout de la plante dans l'utilisateur"], 500);
         }
-        return response()->json(['message' => "Plante ajouté pour " . $user->name], 201);
+        return response()->json(['message' => "Plante ajouté pour " . $user->name . ". " . $notifWatering], 201);
     }
 
     /**

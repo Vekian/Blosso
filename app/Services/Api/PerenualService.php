@@ -1,13 +1,14 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Api;
 
+use App\Contracts\Services\PerenualServiceInterface;
 use App\Models\Plant;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\JsonResponse;
 
-class APIService
+class PerenualService implements PerenualServiceInterface
 {
     const URL_LIST_PLANTS = "https://perenual.com/api/species-list";
     const URL_PLANT = "https://perenual.com/api/species/details/";
@@ -65,7 +66,7 @@ class APIService
         return response()->json(['message' => "La base de donnée a été mise à jour avec succès", 201]);
     }
 
-    public function fetchPlantId($query): int
+    public function fetchPlantId(string $query): int
     {
         $response = $this->fetchData($this::URL_LIST_PLANTS, null, $query);
         if ($response->successful()){

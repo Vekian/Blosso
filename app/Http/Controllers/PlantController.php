@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Plant;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
-use App\Services\APIService;
+use App\Services\Api\PerenualService;
+use App\Services\Api\WeatherService;
 use Illuminate\Http\JsonResponse;
 
 #[OA\Info(title: "API Blossom", version: "0.1")]
@@ -26,9 +27,9 @@ class PlantController extends Controller
             schema: new OA\Schema(type: 'string'),
             example: 'application/json'
         )
-    ],)]
+    ], )]
     #[OA\Response(response: '200', description: 'The data')]
-    public function index()
+    public function index(): JsonResponse
     {
         $plants = Plant::all();
 
@@ -57,9 +58,9 @@ class PlantController extends Controller
             schema: new OA\Schema(type: 'string'),
             example: '{"value": "5-7", "unit": "days"}'
         )
-    ],)]
+    ], )]
     #[OA\Response(response: '201', description: 'La plante a bien été ajouté')]
-    public function create(Request $request, APIService $apiService)
+    public function create(Request $request, PerenualService $apiPlantService): JsonResponse
     {
         $validatedData = $request->validate([
             'common_name' => 'required|string|max:255',
@@ -73,15 +74,14 @@ class PlantController extends Controller
         if ($oldPlant) {
             return response()->json(['message' => "La plante est déjà présente"], 400);
         }
-        $plantId = $apiService->fetchPlantId($validatedData['common_name']);
+        $plantId = $apiPlantService->fetchPlantId($validatedData['common_name']);
         if ($plantId) {
-            $response = $apiService->fetchData($apiService::URL_PLANT, $plantId);
-            if ($response->successful()){
+            $response = $apiPlantService->fetchData($apiPlantService::URL_PLANT, $plantId);
+            if ($response->successful() || !$response->json()) {
                 $plantData = $response->json();
-                $plant = $apiService->updatePlant($plantData);
+                $plant = $apiPlantService->updatePlant($plantData);
             }
-        }
-        else {
+        } else {
             return response()->json(['message' => "Impossible de trouver la plante"], 404);
         }
 
@@ -107,7 +107,7 @@ class PlantController extends Controller
                     new OA\Property(property: 'message', type: 'string', example: 'Réussie')
                 ]
             )
-        ), 
+        ),
         new OA\Response(
             response: 401,
             description: 'Unauthorized',
@@ -116,15 +116,20 @@ class PlantController extends Controller
                     new OA\Property(property: 'message', type: 'string', example: 'Non autorisé')
                 ]
             )
-        ), 
+        ),
     ])]
-    public function show($name)
+    public function show(string $name, PerenualService $apiPlantService): JsonResponse
     {
         try {
-            $plant = Plant::where('common_name', $name)->first();
+            $plant = Plant::where('common_name', 'LIKE', '%' . $name . '%')->first();
 
             if (!$plant) {
-                return response()->json(['message' => 'Aucune plante trouvée'], 404);
+                $response = $apiPlantService->fetchData($apiPlantService::URL_PLANT, null, $name);
+                if (!$response->successful() || !$response->json()) {
+                    return response()->json(['message' => 'Plante non trouvée'], 404);
+                }
+                $plantData = $response->json()[0];
+                $plant = $apiPlantService->updatePlant($plantData);
             }
         } catch (\Exception $e) {
             return response()->json(['message' => 'Erreur lors de la récupération de la plante'], 500);
@@ -151,7 +156,7 @@ class PlantController extends Controller
                     new OA\Property(property: 'message', type: 'string', example: 'Réussie')
                 ]
             )
-        ), 
+        ),
         new OA\Response(
             response: 401,
             description: 'Plante non trouvée',
@@ -160,9 +165,9 @@ class PlantController extends Controller
                     new OA\Property(property: 'message', type: 'string', example: 'Non trouvée')
                 ]
             )
-        ), 
+        ),
     ])]
-    public function destroy(Plant $plant)
+    public function destroy(Plant $plant): JsonResponse
     {
         try {
             $plant->delete();
@@ -172,10 +177,10 @@ class PlantController extends Controller
         }
     }
 
-    public function update(APIService $apiService): JsonResponse
+    public function update(PerenualService $apiPlantService): JsonResponse
     {
         try {
-            $result = $apiService->updatePlants();
+            $result = $apiPlantService->updatePlants();
             return $result;
         } catch(\Exception $e) {
             return response()->json(['message' => 'Erreur lors de la mise à jour des plantes'], 500);
