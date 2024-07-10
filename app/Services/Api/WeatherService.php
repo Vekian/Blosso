@@ -58,6 +58,7 @@ class WeatherService implements WeatherServiceInterface
         $wateringData = json_decode($plant->watering_general_benchmark);
         $parts = explode('-', $wateringData->value);
         $daysWithoutNeedToWater = (intval($parts[0]) + intval($parts[1])) / 2;
+        
         if ($wateringData->unit === "days"){
             $filter = "&hour=12";
             $weatherData = $this->cacheData($city, $this::MAX_DAYS, $filter);

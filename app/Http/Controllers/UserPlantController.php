@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Plant;
 use App\Services\Api\WeatherService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -56,12 +57,7 @@ class UserPlantController extends Controller
                 'city' => 'required|string|max:255',
                 'country' => 'required|string|max:255',
             ]);
-            try {
-                $user= $request->user();
-            } catch (\Exception $e) {
-                return response()->json(['message' => "Erreur d'authentification"], 403);
-            }
-            
+            $user= $request->user();
             $user->city = $validatedLocalisation['city'];
             $user->country = $validatedLocalisation['country'];
             $user->save();
@@ -96,10 +92,14 @@ class UserPlantController extends Controller
             if (!$plantUser) {
                 $user->plants()->attach($plant->id);
             }
+
+            $currentDate = Carbon::now();
+            $formatedDate = Carbon::createFromFormat('d-m-Y', $wateringData['date'])->format('Y-m-d');
+            $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $formatedDate, "checked_at" => $currentDate]);
             
 
         } catch(\Exception $e) {
-            return response()->json(['message' => "Erreur lors de l'ajout de la plante dans l'utilisateur"], 500);
+            return response()->json(['message' => "Erreur lors de l'ajout de la plante dans l'utilisateur" . $e], 500);
         }
         return response()->json(['message' => "Plante ajouté pour " . $user->name . ". " . $notifWatering], 201);
     }

@@ -20,6 +20,6 @@ class Plant extends Model
 
     public function users()
     {
-        return $this->belongsToMany(User::class);
+        return $this->belongsToMany(User::class)->withPivot('trust', 'to_water_at', 'checked_at');
     }
 }

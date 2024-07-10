@@ -50,6 +50,6 @@ class User extends Authenticatable
 
     public function plants()
     {
-        return $this->belongsToMany(Plant::class);
+        return $this->belongsToMany(Plant::class)->withPivot('trust', 'to_water_at', 'checked_at');
     }
 }

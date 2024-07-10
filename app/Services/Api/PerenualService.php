@@ -71,7 +71,7 @@ class PerenualService implements PerenualServiceInterface
         $response = $this->fetchData($this::URL_LIST_PLANTS, null, $query);
         if ($response->successful()){
             $data = $response->json();
-            return $data[0]['id'];
+            return $data['data'][0]['id'];
         }
         else return 0;
     }

@@ -74,7 +74,12 @@ class PlantController extends Controller
         if ($oldPlant) {
             return response()->json(['message' => "La plante est déjà présente"], 400);
         }
-        $plantId = $apiPlantService->fetchPlantId($validatedData['common_name']);
+        try {
+            $plantId = $apiPlantService->fetchPlantId($validatedData['common_name']);
+        }
+        catch (\Exception $e){
+            return response()->json(['message' => "Erreur lors de la récupération de l'id de la plante"], 500);
+        }
         if ($plantId) {
             $response = $apiPlantService->fetchData($apiPlantService::URL_PLANT, $plantId);
             if ($response->successful() || !$response->json()) {
@@ -128,7 +133,7 @@ class PlantController extends Controller
                 if (!$response->successful() || !$response->json()) {
                     return response()->json(['message' => 'Plante non trouvée'], 404);
                 }
-                $plantData = $response->json()[0];
+                $plantData = $response->json()['data'][0];
                 $plant = $apiPlantService->updatePlant($plantData);
             }
         } catch (\Exception $e) {
