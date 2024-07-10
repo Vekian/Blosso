@@ -4,6 +4,8 @@ namespace App\Services\Api;
 
 use App\Contracts\Services\WeatherServiceInterface;
 use App\Models\Plant;
+use App\Models\User;
+use App\Notifications\WateringReminder;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\JsonResponse;
@@ -58,7 +60,7 @@ class WeatherService implements WeatherServiceInterface
         $wateringData = json_decode($plant->watering_general_benchmark);
         $parts = explode('-', $wateringData->value);
         $daysWithoutNeedToWater = (intval($parts[0]) + intval($parts[1])) / 2;
-        
+
         if ($wateringData->unit === "days"){
             $filter = "&hour=12";
             $weatherData = $this->cacheData($city, $this::MAX_DAYS, $filter);
@@ -116,5 +118,25 @@ class WeatherService implements WeatherServiceInterface
             "weeks" => $currentDate->addWeeks($value)->format('d-m-Y'),
         };
         return $futureDate;
+    }
+
+    public function sendReminderWatering() {
+        $users = User::all();
+        foreach($users as $user) {
+            $plants = $user->plants;
+            foreach($plants as $plant) {
+                $dateToWater = $plant->pivot->to_water_at;
+                $trust = $plant->pivot->trust;
+                $currentDate = Carbon::now()->format('Y-m-d');
+                if ($dateToWater === $currentDate){
+                    if (!$trust){
+                        $wateringData = $this->calculeWhenToWater($plant, $user->city);
+                        $formatedDate = Carbon::createFromFormat('d-m-Y', $wateringData['date'])->format('Y-m-d');
+                        $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $formatedDate, "checked_at" => $currentDate]);
+                    }
+                    $user->notify(new WateringReminder($plant));
+                }
+            }
+        }
     }
 }
