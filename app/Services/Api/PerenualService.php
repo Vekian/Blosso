@@ -12,6 +12,7 @@ class PerenualService implements PerenualServiceInterface
 {
     const URL_LIST_PLANTS = "https://perenual.com/api/species-list";
     const URL_PLANT = "https://perenual.com/api/species/details/";
+    const URL_TRANSLATE = "https://api.mymemory.translated.net/get";
     
     public function fetchData(string $baseUrl, int|null $id = null, string|null $query = null): Response
     {
@@ -78,12 +79,11 @@ class PerenualService implements PerenualServiceInterface
 
     public function translatePlantName(string $plantName, string $langage): string
     {
-        $apiKey = "f3a35b2517e44b7a2e3d";
-        $baseUrl = "https://api.mymemory.translated.net/get";
+        $apiKey = env('API_TRANSLATE_KEY');
         $langName = match($langage) {
             "french" => "fr",
         };
-        $url = $baseUrl . "?q=" . $plantName . "&langpair=" . $langName . "|en&key=" . $apiKey;
+        $url = $this::URL_TRANSLATE . "?q=" . $plantName . "&langpair=" . $langName . "|en&key=" . $apiKey;
 
         $response = Http::get($url);
         $data = json_decode($response->getBody(), true);
