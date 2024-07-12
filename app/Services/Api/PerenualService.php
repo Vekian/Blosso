@@ -69,10 +69,26 @@ class PerenualService implements PerenualServiceInterface
     public function fetchPlantId(string $query): int
     {
         $response = $this->fetchData($this::URL_LIST_PLANTS, null, $query);
-        if ($response->successful()){
+        if ($response->successful() && $response->json()['data'] !== []){
             $data = $response->json();
             return $data['data'][0]['id'];
         }
         else return 0;
     }
+
+    public function translatePlantName(string $plantName, string $langage): string
+    {
+        $apiKey = "f3a35b2517e44b7a2e3d";
+        $baseUrl = "https://api.mymemory.translated.net/get";
+        $langName = match($langage) {
+            "french" => "fr",
+        };
+        $url = $baseUrl . "?q=" . $plantName . "&langpair=" . $langName . "|en&key=" . $apiKey;
+
+        $response = Http::get($url);
+        $data = json_decode($response->getBody(), true);
+        $plantNameTranslated = preg_split('/[\s-]+/', $data['responseData']['translatedText']); 
+        return $plantNameTranslated[0];
+    }
+    
 }

@@ -128,16 +128,22 @@ class PlantController extends Controller
         try {
             $plant = Plant::where('common_name', 'LIKE', '%' . $name . '%')->first();
 
+            if (!$plant){
+                $name= $apiPlantService->translatePlantName($name, "french");
+                $plant = Plant::where('common_name', 'LIKE', '%' . $name . '%')->first();
+            }
+
             if (!$plant) {
-                $response = $apiPlantService->fetchData($apiPlantService::URL_PLANT, null, $name);
+                $plantId = $apiPlantService->fetchPlantId($name);
+                $response = $apiPlantService->fetchData($apiPlantService::URL_PLANT, $plantId);
                 if (!$response->successful() || !$response->json()) {
                     return response()->json(['message' => 'Plante non trouvée'], 404);
                 }
-                $plantData = $response->json()['data'][0];
+                $plantData = $response->json();
                 $plant = $apiPlantService->updatePlant($plantData);
             }
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Erreur lors de la récupération de la plante'], 500);
+            return response()->json(['message' => 'Erreur lors de la récupération de la plante' . $e], 500);
         }
         
 

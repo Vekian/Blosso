@@ -8,9 +8,8 @@ use App\Models\User;
 use App\Notifications\WateringReminder;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Http\JsonResponse;
+use App\Services\Api\DateService;
 use Illuminate\Support\Facades\Cache;
-use Carbon\Carbon;
 
 class WeatherService implements WeatherServiceInterface
 {
@@ -18,6 +17,11 @@ class WeatherService implements WeatherServiceInterface
     const URL_FORECAST_WEATHER = "http://api.weatherapi.com/v1//forecast.json";
     const MAX_DAYS = 7;
     const CHANCE_OF_RAIN = 30;
+
+    public function __construct(private DateService $dateService)
+    {
+        
+    }
 
     public function fetchData(string $baseUrl, ?string $query = null, int $days = null, string $filter = null): Response
     {
@@ -49,22 +53,24 @@ class WeatherService implements WeatherServiceInterface
             $response = $this->fetchData($this::URL_FORECAST_WEATHER, $city, $days, $filter);
             if ($response->successful() && $response->json()) {
                 return $response->json();
+            } else {
+                return [];
             }
-            else return [];
         });
 
         return $value;
     }
 
-    public function calculeWhenToWater(Plant $plant, $city){
+    public function calculeWhenToWater(Plant $plant, $city): array
+    {
         $wateringData = json_decode($plant->watering_general_benchmark);
         $parts = explode('-', $wateringData->value);
         $daysWithoutNeedToWater = (intval($parts[0]) + intval($parts[1])) / 2;
 
-        if ($wateringData->unit === "days"){
+        if ($wateringData->unit === "days") {
             $filter = "&hour=12";
             $weatherData = $this->cacheData($city, $this::MAX_DAYS, $filter);
-            if ($weatherData !== []){
+            if ($weatherData !== []) {
                 $forecasts = $weatherData['forecast']['forecastday'];
                 $dateToWater = "";
                 $willRain = false;
@@ -75,22 +81,22 @@ class WeatherService implements WeatherServiceInterface
                     $chanceOfRain = $forecasts[$i]['day']['daily_chance_of_rain'];
                     if ($rain && $chanceOfRain > $this::CHANCE_OF_RAIN) {
                         $willRain = true;
-                        if ($daysWithoutNeedToWater + ($i +1) > $this::MAX_DAYS){
+                        if ($daysWithoutNeedToWater + ($i +1) > $this::MAX_DAYS) {
                             $trust = false;
                         } else {
-                            $dateToWater = $this->calculateDate($daysWithoutNeedToWater + ($i + 1), $wateringData->unit);
+                            $dateToWater = $this->dateService->calculateDate($daysWithoutNeedToWater + ($i + 1), $wateringData->unit);
                         }
                         $indexMax++;
-                        if ($indexMax > $this::MAX_DAYS){
+                        if ($indexMax > $this::MAX_DAYS) {
                             break;
                         }
                     }
                 }
-                if (!$willRain){
-                    $dateToWater = $this->calculateDate($daysWithoutNeedToWater, $wateringData->unit);
+                if (!$willRain) {
+                    $dateToWater = $this->dateService->calculateDate($daysWithoutNeedToWater, $wateringData->unit);
                 }
                 if (!$trust) {
-                    $dateToWater = $this->calculateDate($this::MAX_DAYS, $wateringData->unit);
+                    $dateToWater = $this->dateService->calculateDate($this::MAX_DAYS, $wateringData->unit);
                     
                 }
                 $result = [
@@ -100,9 +106,8 @@ class WeatherService implements WeatherServiceInterface
 
                 return $result;
             }
-        }
-        else {
-            $dateToWater = $this->calculateDate($daysWithoutNeedToWater, $wateringData->unit);
+        } else {
+            $dateToWater = $this->dateService->calculateDate($daysWithoutNeedToWater, $wateringData->unit);
             $result = [
                 "trust" => false,
                 "date" => $dateToWater,
@@ -111,28 +116,19 @@ class WeatherService implements WeatherServiceInterface
         }
     }
 
-    public function calculateDate($value, $unit){
-        $currentDate = Carbon::now();
-        $futureDate = match($unit) {
-            "days" => $currentDate->addDays($value)->format('d-m-Y'),
-            "weeks" => $currentDate->addWeeks($value)->format('d-m-Y'),
-        };
-        return $futureDate;
-    }
-
-    public function sendReminderWatering() {
+    public function sendReminderWatering()
+    {
         $users = User::all();
         foreach($users as $user) {
             $plants = $user->plants;
             foreach($plants as $plant) {
                 $dateToWater = $plant->pivot->to_water_at;
                 $trust = $plant->pivot->trust;
-                $currentDate = Carbon::now()->format('Y-m-d');
-                if ($dateToWater === $currentDate){
-                    if (!$trust){
+                $currentDate = $this->dateService->calculateDate(0, "days");
+                if ($dateToWater === $currentDate) {
+                    if (!$trust) {
                         $wateringData = $this->calculeWhenToWater($plant, $user->city);
-                        $formatedDate = Carbon::createFromFormat('d-m-Y', $wateringData['date'])->format('Y-m-d');
-                        $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $formatedDate, "checked_at" => $currentDate]);
+                        $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $wateringData['date'], "checked_at" => $currentDate]);
                     }
                     $user->notify(new WateringReminder($plant));
                 }

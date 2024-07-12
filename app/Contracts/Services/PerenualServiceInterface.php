@@ -12,4 +12,5 @@ interface PerenualServiceInterface
     public function updatePlant(array $plantData): Plant;
     public function updatePlants(): JsonResponse;
     public function fetchPlantId(string $query): int;
+    public function translatePlantName(string $plantName, string $langage): string;
 }

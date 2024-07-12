@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plant;
+use App\Services\Api\DateService;
 use App\Services\Api\WeatherService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -50,7 +52,7 @@ class UserPlantController extends Controller
             )
         ), 
     ])]
-    public function create(Request $request, WeatherService $weatherService)
+    public function create(Request $request, WeatherService $weatherService, DateService $dateService): JsonResponse
     {
         try {
             $validatedLocalisation = $request->validate([
@@ -81,9 +83,10 @@ class UserPlantController extends Controller
 
             try {
                 $wateringData = $weatherService->calculeWhenToWater($plant, $user->city);
+                $formatedDate = $dateService->formatDate($wateringData['date'], "Y-m-d", "d-m-Y");
                 $notifWatering = match($wateringData['trust']){
-                    true => "Il faudra l'arroser le " . $wateringData['date'],
-                    false => "Pas besoin d'arroser jusqu'au " . $wateringData['date'],
+                    true => "Il faudra l'arroser le " . $formatedDate,
+                    false => "Pas besoin d'arroser jusqu'au " . $formatedDate,
                 };
             } catch (\Exception $e) {
                 return response()->json(['message' => 'Erreur lors du calcul de la date d\'arrosage: ' . $e], 500);
@@ -93,9 +96,8 @@ class UserPlantController extends Controller
                 $user->plants()->attach($plant->id);
             }
 
-            $currentDate = Carbon::now();
-            $formatedDate = Carbon::createFromFormat('d-m-Y', $wateringData['date'])->format('Y-m-d');
-            $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $formatedDate, "checked_at" => $currentDate]);
+            $currentDate = $dateService->calculateDate(0, "days");
+            $user->plants()->updateExistingPivot($plant->id, ['trust' => $wateringData['trust'], 'to_water_at' => $wateringData['date'], "checked_at" => $currentDate]);
             
 
         } catch(\Exception $e) {
@@ -136,7 +138,7 @@ class UserPlantController extends Controller
             )
         ), 
     ])]
-    public function destroy(Plant $plant, Request $request)
+    public function destroy(Plant $plant, Request $request): JsonResponse
     {
         try {
             try {
